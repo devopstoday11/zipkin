@@ -139,7 +139,7 @@ public abstract class ITStorage<T extends StorageComponent> {
     return result;
   }
 
-  static ArrayList<Span> sortTrace(List<Span> trace) {
+  protected static ArrayList<Span> sortTrace(List<Span> trace) {
     ArrayList<Span> result = new ArrayList<>(trace);
     result.sort((l, r) -> { // Include trace ID to ensure mixed-length traces have consistent order
       int traceId = l.traceId().compareTo(r.traceId());

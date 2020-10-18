@@ -26,7 +26,9 @@ wget -qO- $APACHE_MIRROR/cassandra/$CASSANDRA_VERSION/apache-cassandra-$CASSANDR
   --strip=1
 
 # Merge in our custom configuration
-sed -i '/enable_user_defined_functions: false/cenable_user_defined_functions: true' conf/cassandra.yaml
+for feature in enable_user_defined_functions enable_sasi_indexes; do
+  sed -i "/$feature: false/c$feature: true/" conf/cassandra.yaml
+done
 
 # Default conf for Cassandra 3.x does not work on modern JVMs due to many deprecated flags
 sed -i '/-XX:ThreadPriorityPolicy=42/c\#-XX:ThreadPriorityPolicy=42' conf/jvm.options

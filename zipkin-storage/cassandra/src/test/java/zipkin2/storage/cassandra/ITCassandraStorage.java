@@ -13,12 +13,17 @@
  */
 package zipkin2.storage.cassandra;
 
-import com.datastax.driver.core.Host;
-import com.datastax.driver.core.KeyspaceMetadata;
-import com.datastax.driver.core.Session;
+import com.codahale.metrics.Gauge;
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.metadata.Node;
+import com.datastax.oss.driver.api.core.metadata.schema.KeyspaceMetadata;
+import com.datastax.oss.driver.api.core.metrics.DefaultNodeMetric;
+import com.datastax.oss.driver.api.core.metrics.Metrics;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -42,7 +47,7 @@ import static zipkin2.storage.cassandra.InternalForTests.writeDependencyLinks;
 class ITCassandraStorage {
 
   @RegisterExtension CassandraStorageExtension backend = new CassandraStorageExtension(
-    "openzipkin/zipkin-cassandra:2.21.7");
+    "openzipkin/zipkin-cassandra:test");
 
   @Nested
   class ITTraces extends zipkin2.storage.ITTraces<CassandraStorage> {
@@ -161,10 +166,10 @@ class ITCassandraStorage {
 
     @Test void doesntCreateIndexes() {
       KeyspaceMetadata metadata =
-        storage.session().getCluster().getMetadata().getKeyspace(storage.keyspace);
+        storage.session().getMetadata().getKeyspace(storage.keyspace).get();
 
-      assertThat(metadata.getTable("trace_by_service_span")).isNull();
-      assertThat(metadata.getTable("span_by_service")).isNull();
+      assertThat(metadata.getTable("trace_by_service_span")).isEmpty();
+      assertThat(metadata.getTable("span_by_service")).isEmpty();
     }
 
     @Override public void clear() {
@@ -215,8 +220,8 @@ class ITCassandraStorage {
     @Test public void getTrace_retrievesBy128BitTraceId_afterSwitch() throws IOException {
       List<Span> trace = accept128BitTrace(strictTraceId);
 
-      assertThat(traces().getTrace(trace.get(0).traceId()).execute())
-        .containsAll(trace);
+      assertThat(sortTrace(traces().getTrace(trace.get(0).traceId()).execute()))
+        .containsExactlyElementsOf(trace);
     }
   }
 
@@ -298,7 +303,7 @@ class ITCassandraStorage {
       return InternalForTests.keyspace(testInfo);
     }
 
-    @Override protected Session session() {
+    @Override protected CqlSession session() {
       return backend.globalSession;
     }
 
@@ -316,22 +321,28 @@ class ITCassandraStorage {
 
   static void blockWhileInFlight(CassandraStorage storage) {
     // Now, block until writes complete, notably so we can read them.
-    Session.State state = storage.session().getState();
-    refresh:
     while (true) {
-      for (Host host : state.getConnectedHosts()) {
-        if (state.getInFlightQueries(host) > 0) {
-          try {
-            Thread.sleep(100);
-          } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError(e);
-          }
-          state = storage.session().getState();
-          continue refresh;
-        }
+      if (!poolInFlight(storage.session.get())) return;
+      try {
+        Thread.sleep(100);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new AssertionError(e);
       }
-      break;
     }
+  }
+
+  // Use metrics to wait for in-flight requests to settle per
+  // https://groups.google.com/a/lists.datastax.com/g/java-driver-user/c/5um_yGNynow/m/cInH5I5jBgAJ
+  static boolean poolInFlight(CqlSession session) {
+    Collection<Node> nodes = session.getMetadata().getNodes().values();
+    Optional<Metrics> metrics = session.getMetrics();
+    for (Node node : nodes) {
+      int inFlight = metrics.flatMap(m -> m.getNodeMetric(node, DefaultNodeMetric.IN_FLIGHT))
+        .map(m -> ((Gauge<Integer>) m).getValue())
+        .orElse(0);
+      if (inFlight > 0) return true;
+    }
+    return false;
   }
 }

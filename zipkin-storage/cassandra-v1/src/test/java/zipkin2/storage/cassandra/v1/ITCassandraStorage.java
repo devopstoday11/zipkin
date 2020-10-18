@@ -13,11 +13,16 @@
  */
 package zipkin2.storage.cassandra.v1;
 
-import com.datastax.driver.core.Host;
-import com.datastax.driver.core.Session;
+import com.codahale.metrics.Gauge;
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.metadata.Node;
+import com.datastax.oss.driver.api.core.metrics.DefaultNodeMetric;
+import com.datastax.oss.driver.api.core.metrics.Metrics;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
@@ -152,12 +157,11 @@ class ITCassandraStorage {
           .putTag("host.name", "host1")
           .build());
       }
-      QueryRequest queryRequest =
-        requestBuilder()
-          .parseAnnotationQuery("host.name=host1")
-          .serviceName(endpoint.serviceName())
-          .limit(queryLimit)
-          .build();
+      QueryRequest queryRequest = requestBuilder()
+        .parseAnnotationQuery("host.name=host1")
+        .serviceName(endpoint.serviceName())
+        .limit(queryLimit)
+        .build();
       assertThat(store().getTraces(queryRequest).execute()).hasSize(queryLimit);
     }
 
@@ -286,7 +290,7 @@ class ITCassandraStorage {
       return InternalForTests.keyspace(testInfo);
     }
 
-    @Override protected Session session() {
+    @Override protected CqlSession session() {
       return backend.globalSession;
     }
 
@@ -304,22 +308,28 @@ class ITCassandraStorage {
 
   static void blockWhileInFlight(CassandraStorage storage) {
     // Now, block until writes complete, notably so we can read them.
-    Session.State state = storage.session().getState();
-    refresh:
     while (true) {
-      for (Host host : state.getConnectedHosts()) {
-        if (state.getInFlightQueries(host) > 0) {
-          try {
-            Thread.sleep(100);
-          } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError(e);
-          }
-          state = storage.session().getState();
-          continue refresh;
-        }
+      if (!poolInFlight(storage.session.get())) return;
+      try {
+        Thread.sleep(100);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new AssertionError(e);
       }
-      break;
     }
+  }
+
+  // Use metrics to wait for in-flight requests to settle per
+  // https://groups.google.com/a/lists.datastax.com/g/java-driver-user/c/5um_yGNynow/m/cInH5I5jBgAJ
+  static boolean poolInFlight(CqlSession session) {
+    Collection<Node> nodes = session.getMetadata().getNodes().values();
+    Optional<Metrics> metrics = session.getMetrics();
+    for (Node node : nodes) {
+      int inFlight = metrics.flatMap(m -> m.getNodeMetric(node, DefaultNodeMetric.IN_FLIGHT))
+        .map(m -> ((Gauge<Integer>) m).getValue())
+        .orElse(0);
+      if (inFlight > 0) return true;
+    }
+    return false;
   }
 }

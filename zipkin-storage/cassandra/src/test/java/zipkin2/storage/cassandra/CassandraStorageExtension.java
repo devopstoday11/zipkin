@@ -13,7 +13,7 @@
  */
 package zipkin2.storage.cassandra;
 
-import com.datastax.driver.core.Session;
+import com.datastax.oss.driver.api.core.CqlSession;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.AfterAllCallback;
@@ -26,13 +26,14 @@ import org.testcontainers.containers.ContainerLaunchException;
 import org.testcontainers.containers.GenericContainer;
 
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static zipkin2.Call.propagateIfFatal;
 
 public class CassandraStorageExtension implements BeforeAllCallback, AfterAllCallback {
   static final Logger LOGGER = LoggerFactory.getLogger(CassandraStorageExtension.class);
   static final int CASSANDRA_PORT = 9042;
   final String image;
   CassandraContainer container;
-  Session globalSession;
+  CqlSession globalSession;
 
   CassandraStorageExtension(String image) {
     this.image = image;
@@ -68,14 +69,15 @@ public class CassandraStorageExtension implements BeforeAllCallback, AfterAllCal
   }
 
   // Builds a session without trying to use a namespace or init UDTs
-  static Session tryToInitializeSession(String contactPoint) {
+  static CqlSession tryToInitializeSession(String contactPoint) {
     CassandraStorage storage = newStorageBuilder(contactPoint).build();
-    Session session = null;
+    CqlSession session = null;
     try {
       session = DefaultSessionFactory.buildSession(storage);
       session.execute("SELECT now() FROM system.local");
     } catch (Throwable e) {
-      if (session != null) session.getCluster().close();
+      propagateIfFatal(e);
+      if (session != null) session.close();
       assumeTrue(false, e.getMessage());
     }
     return session;
@@ -108,7 +110,7 @@ public class CassandraStorageExtension implements BeforeAllCallback, AfterAllCal
       // Only run once in outermost scope.
       return;
     }
-    if (globalSession != null) globalSession.getCluster().close();
+    if (globalSession != null) globalSession.close();
   }
 
   static final class CassandraContainer extends GenericContainer<CassandraContainer> {
@@ -121,7 +123,7 @@ public class CassandraStorageExtension implements BeforeAllCallback, AfterAllCal
         if (!isRunning()) throw new ContainerLaunchException("Container failed to start");
 
         String contactPoint = getContainerIpAddress() + ":" + getMappedPort(9042);
-        try (Session session = tryToInitializeSession(contactPoint)) {
+        try (CqlSession session = tryToInitializeSession(contactPoint)) {
           session.execute("SELECT now() FROM system.local");
           logger().info("Obtained a connection to container ({})", contactPoint);
           return null; // unused value

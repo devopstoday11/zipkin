@@ -13,13 +13,13 @@
  */
 package zipkin2.storage.cassandra;
 
-import com.datastax.driver.core.Session;
-import com.datastax.driver.core.utils.UUIDs;
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.uuid.Uuids;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map.Entry;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import zipkin2.Annotation;
@@ -36,7 +36,7 @@ import static zipkin2.storage.cassandra.Schema.TABLE_SERVICE_REMOTE_SERVICES;
 import static zipkin2.storage.cassandra.Schema.TABLE_SERVICE_SPANS;
 
 class CassandraSpanConsumer implements SpanConsumer { // not final for testing
-  final Session session;
+  final CqlSession session;
   final boolean strictTraceId, searchEnabled;
   final InsertSpan.Factory insertSpan;
   final Set<String> autocompleteKeys;
@@ -57,7 +57,7 @@ class CassandraSpanConsumer implements SpanConsumer { // not final for testing
   }
 
   // Exposed to allow tests to switch from strictTraceId to not
-  CassandraSpanConsumer(Session session, Schema.Metadata metadata,
+  CassandraSpanConsumer(CqlSession session, Schema.Metadata metadata,
     boolean strictTraceId, boolean searchEnabled,
     Set<String> autocompleteKeys, int autocompleteTtl, int autocompleteCardinality) {
     this.session = session;
@@ -110,12 +110,12 @@ class CassandraSpanConsumer implements SpanConsumer { // not final for testing
     if (input.isEmpty()) return Call.create(null);
 
     Set<InsertSpan.Input> spans = new LinkedHashSet<>();
-    Set<Entry<String, String>> serviceRemoteServices = new LinkedHashSet<>();
-    Set<Entry<String, String>> serviceSpans = new LinkedHashSet<>();
+    Set<Map.Entry<String, String>> serviceRemoteServices = new LinkedHashSet<>();
+    Set<Map.Entry<String, String>> serviceSpans = new LinkedHashSet<>();
     Set<InsertTraceByServiceRemoteService.Input> traceByServiceRemoteServices =
       new LinkedHashSet<>();
     Set<InsertTraceByServiceSpan.Input> traceByServiceSpans = new LinkedHashSet<>();
-    Set<Entry<String, String>> autocompleteTags = new LinkedHashSet<>();
+    Set<Map.Entry<String, String>> autocompleteTags = new LinkedHashSet<>();
 
     for (Span s : input) {
       // indexing occurs by timestamp, so derive one if not present.
@@ -125,9 +125,9 @@ class CassandraSpanConsumer implements SpanConsumer { // not final for testing
       // fallback to current time on the ts_uuid for span data, so we know when it was inserted
       UUID ts_uuid =
         new UUID(
-          UUIDs.startOf(ts_micro != 0L ? (ts_micro / 1000L) : System.currentTimeMillis())
+          Uuids.startOf(ts_micro != 0L ? (ts_micro / 1000L) : System.currentTimeMillis())
             .getMostSignificantBits(),
-          UUIDs.random().getLeastSignificantBits());
+          Uuids.random().getLeastSignificantBits());
 
       spans.add(insertSpan.newInput(s, ts_uuid));
 
@@ -163,7 +163,7 @@ class CassandraSpanConsumer implements SpanConsumer { // not final for testing
         insertTraceByServiceSpan.newInput(service, "", bucket, ts_uuid, s.traceId(), duration));
 
       if (insertAutocompleteValue != null) {
-        for (Entry<String, String> entry : s.tags().entrySet()) {
+        for (Map.Entry<String, String> entry : s.tags().entrySet()) {
           if (autocompleteKeys.contains(entry.getKey())) autocompleteTags.add(entry);
         }
       }
@@ -172,10 +172,10 @@ class CassandraSpanConsumer implements SpanConsumer { // not final for testing
     for (InsertSpan.Input span : spans) {
       calls.add(insertSpan.create(span));
     }
-    for (Entry<String, String> serviceSpan : serviceSpans) {
+    for (Map.Entry<String, String> serviceSpan : serviceSpans) {
       insertServiceSpan.maybeAdd(serviceSpan, calls);
     }
-    for (Entry<String, String> serviceRemoteService : serviceRemoteServices) {
+    for (Map.Entry<String, String> serviceRemoteService : serviceRemoteServices) {
       insertServiceRemoteService.maybeAdd(serviceRemoteService, calls);
     }
     for (InsertTraceByServiceSpan.Input serviceSpan : traceByServiceSpans) {
@@ -184,7 +184,7 @@ class CassandraSpanConsumer implements SpanConsumer { // not final for testing
     for (InsertTraceByServiceRemoteService.Input serviceRemoteService : traceByServiceRemoteServices) {
       calls.add(insertTraceByServiceRemoteService.create(serviceRemoteService));
     }
-    for (Entry<String, String> autocompleteTag : autocompleteTags) {
+    for (Map.Entry<String, String> autocompleteTag : autocompleteTags) {
       insertAutocompleteValue.maybeAdd(autocompleteTag, calls);
     }
     return calls.isEmpty() ? Call.create(null) : AggregateCall.newVoidCall(calls);

@@ -13,7 +13,7 @@
  */
 package zipkin2.storage.cassandra.v1;
 
-import com.datastax.driver.core.Session;
+import com.datastax.oss.driver.api.core.CqlSession;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.AfterAllCallback;
@@ -24,14 +24,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.ContainerLaunchException;
 import org.testcontainers.containers.GenericContainer;
-import zipkin2.storage.cassandra.Access;
+
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static zipkin2.Call.propagateIfFatal;
 
 public class CassandraStorageExtension implements BeforeAllCallback, AfterAllCallback {
   static final Logger LOGGER = LoggerFactory.getLogger(CassandraStorageExtension.class);
   static final int CASSANDRA_PORT = 9042;
   final String image;
   CassandraContainer container;
-  Session globalSession;
+  CqlSession globalSession;
 
   CassandraStorageExtension(String image) {
     this.image = image;
@@ -56,14 +58,29 @@ public class CassandraStorageExtension implements BeforeAllCallback, AfterAllCal
     }
 
     try {
-      globalSession = Access.tryToInitializeSession(contactPoint());
+      globalSession = tryToInitializeSession(contactPoint());
     } catch (RuntimeException | Error e) {
       if (container == null) throw e;
       LOGGER.warn("Couldn't connect to docker image " + image + ": " + e.getMessage(), e);
       container.stop();
       container = null; // try with local connection instead
-      globalSession = Access.tryToInitializeSession(contactPoint());
+      globalSession = tryToInitializeSession(contactPoint());
     }
+  }
+
+  // Builds a session without trying to use a namespace or init UDTs
+  static CqlSession tryToInitializeSession(String contactPoint) {
+    CassandraStorage storage = newStorageBuilder(contactPoint).build();
+    CqlSession session = null;
+    try {
+      session = SessionFactory.Default.buildSession(storage);
+      session.execute("SELECT now() FROM system.local");
+    } catch (Throwable e) {
+      propagateIfFatal(e);
+      if (session != null) session.close();
+      assumeTrue(false, e.getMessage());
+    }
+    return session;
   }
 
   CassandraStorage.Builder newStorageBuilder(TestInfo testInfo) {
@@ -93,7 +110,7 @@ public class CassandraStorageExtension implements BeforeAllCallback, AfterAllCal
       // Only run once in outermost scope.
       return;
     }
-    if (globalSession != null) globalSession.getCluster().close();
+    if (globalSession != null) globalSession.close();
   }
 
   static final class CassandraContainer extends GenericContainer<CassandraContainer> {
@@ -103,12 +120,10 @@ public class CassandraStorageExtension implements BeforeAllCallback, AfterAllCal
 
     @Override protected void waitUntilContainerStarted() {
       Unreliables.retryUntilSuccess(120, TimeUnit.SECONDS, () -> {
-        if (!isRunning()) {
-          throw new ContainerLaunchException("Container failed to start");
-        }
+        if (!isRunning()) throw new ContainerLaunchException("Container failed to start");
 
         String contactPoint = getContainerIpAddress() + ":" + getMappedPort(9042);
-        try (Session session = Access.tryToInitializeSession(contactPoint)) {
+        try (CqlSession session = tryToInitializeSession(contactPoint)) {
           session.execute("SELECT now() FROM system.local");
           logger().info("Obtained a connection to container ({})", contactPoint);
           return null; // unused value

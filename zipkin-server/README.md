@@ -243,8 +243,7 @@ Example usage with Cassandra connection and query logging:
 
 ```bash
 $ STORAGE_TYPE=cassandra3 java -jar zipkin.jar \
- --logging.level.com.datastax.driver.core.Connection=debug \
- --logging.level.com.datastax.driver.core.QueryLogger.NORMAL=trace
+ --logging.level.com.datastax.oss.driver.api.core.cql=debug
 ```
 
 ### Elasticsearch Storage

@@ -13,21 +13,20 @@
  */
 package zipkin2.storage.cassandra.internal;
 
-import org.junit.Test;
-import zipkin2.storage.StorageComponent;
+import com.datastax.oss.driver.api.core.CqlIdentifier;
+import com.datastax.oss.driver.api.core.metadata.schema.KeyspaceMetadata;
+import com.datastax.oss.driver.api.core.metadata.schema.TableMetadata;
+import java.util.Optional;
 
-import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.CONNECTION_POOL_LOCAL_SIZE;
-import static org.assertj.core.api.Assertions.assertThat;
+public final class KeyspaceMetadataUtil {
 
-public class CassandraStorageBuilderTest {
-  CassandraStorageBuilder<?> builder = new CassandraStorageBuilder("zipkin3") {
-    @Override public StorageComponent build() {
-      return null;
-    }
-  };
+  public static int getDefaultTtl(KeyspaceMetadata keyspaceMetadata, String table) {
+    return (int) keyspaceMetadata.getTable(table)
+      .map(TableMetadata::getOptions)
+      .flatMap(o -> Optional.ofNullable(o.get(CqlIdentifier.fromCql("default_time_to_live"))))
+      .orElse(0);
+  }
 
-  @Test public void maxConnections_setsMaxConnectionsPerDatacenterLocalHost() {
-    assertThat(builder.maxConnections(16).poolingOptions().get(CONNECTION_POOL_LOCAL_SIZE))
-      .isEqualTo(16);
+  KeyspaceMetadataUtil() {
   }
 }

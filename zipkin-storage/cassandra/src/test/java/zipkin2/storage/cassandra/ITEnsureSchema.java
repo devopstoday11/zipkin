@@ -13,8 +13,8 @@
  */
 package zipkin2.storage.cassandra;
 
-import com.datastax.driver.core.KeyspaceMetadata;
-import com.datastax.driver.core.Session;
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.metadata.schema.KeyspaceMetadata;
 import org.junit.jupiter.api.Test;
 import zipkin2.TestObjects;
 import zipkin2.storage.QueryRequest;
@@ -30,14 +30,14 @@ abstract class ITEnsureSchema {
 
   abstract protected String keyspace();
 
-  abstract protected Session session();
+  abstract protected CqlSession session();
 
   abstract String contactPoint();
 
   @Test void installsKeyspaceWhenMissing() {
     Schema.ensureExists(keyspace(), false, session());
 
-    KeyspaceMetadata metadata = session().getCluster().getMetadata().getKeyspace(keyspace());
+    KeyspaceMetadata metadata = session().getMetadata().getKeyspace(keyspace()).get();
     assertThat(metadata).isNotNull();
   }
 
@@ -47,8 +47,8 @@ abstract class ITEnsureSchema {
 
     Schema.ensureExists(keyspace(), false, session());
 
-    KeyspaceMetadata metadata = session().getCluster().getMetadata().getKeyspace(keyspace());
-    assertThat(metadata.getTable("span")).isNotNull();
+    KeyspaceMetadata metadata = session().getMetadata().getKeyspace(keyspace()).get();
+    assertThat(metadata.getTable("span")).isPresent();
   }
 
   @Test void installsIndexesWhenMissing() {
@@ -57,9 +57,9 @@ abstract class ITEnsureSchema {
 
     Schema.ensureExists(keyspace(), true, session());
 
-    KeyspaceMetadata metadata = session().getCluster().getMetadata().getKeyspace(keyspace());
-    assertThat(metadata.getTable("trace_by_service_span")).isNotNull();
-    assertThat(metadata.getTable("autocomplete_tags")).isNotNull();
+    KeyspaceMetadata metadata = session().getMetadata().getKeyspace(keyspace()).get();
+    assertThat(metadata.getTable("trace_by_service_span")).isPresent();
+    assertThat(metadata.getTable("autocomplete_tags")).isPresent();
   }
 
   @Test void upgradesOldSchema_autocomplete() {
@@ -68,8 +68,7 @@ abstract class ITEnsureSchema {
 
     Schema.ensureExists(keyspace(), true, session());
 
-    KeyspaceMetadata metadata = session().getCluster().getMetadata().getKeyspace(keyspace());
-    assertThat(metadata).isNotNull();
+    KeyspaceMetadata metadata = session().getMetadata().getKeyspace(keyspace()).get();
     assertThat(Schema.hasUpgrade1_autocompleteTags(metadata)).isTrue();
   }
 
@@ -80,8 +79,7 @@ abstract class ITEnsureSchema {
 
     Schema.ensureExists(keyspace(), true, session());
 
-    KeyspaceMetadata metadata = session().getCluster().getMetadata().getKeyspace(keyspace());
-    assertThat(metadata).isNotNull();
+    KeyspaceMetadata metadata = session().getMetadata().getKeyspace(keyspace()).get();
     assertThat(Schema.hasUpgrade2_remoteService(metadata)).isTrue();
   }
 

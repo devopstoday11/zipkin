@@ -13,8 +13,8 @@
  */
 package zipkin2.storage.cassandra.v1;
 
-import com.datastax.driver.core.KeyspaceMetadata;
-import com.datastax.driver.core.Session;
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.metadata.schema.KeyspaceMetadata;
 import org.junit.jupiter.api.Test;
 import zipkin2.TestObjects;
 import zipkin2.storage.QueryRequest;
@@ -30,14 +30,14 @@ abstract class ITEnsureSchema {
 
   abstract String keyspace();
 
-  abstract Session session();
+  abstract CqlSession session();
 
   abstract String contactPoint();
 
   @Test public void installsKeyspaceWhenMissing() {
     Schema.ensureExists(keyspace(), session());
 
-    KeyspaceMetadata metadata = session().getCluster().getMetadata().getKeyspace(keyspace());
+    KeyspaceMetadata metadata = session().getMetadata().getKeyspace(keyspace()).get();
     assertThat(metadata).isNotNull();
     assertThat(Schema.hasUpgrade1_defaultTtl(metadata)).isTrue();
   }
@@ -48,7 +48,7 @@ abstract class ITEnsureSchema {
 
     Schema.ensureExists(keyspace(), session());
 
-    KeyspaceMetadata metadata = session().getCluster().getMetadata().getKeyspace(keyspace());
+    KeyspaceMetadata metadata = session().getMetadata().getKeyspace(keyspace()).get();
     assertThat(metadata).isNotNull();
     assertThat(Schema.hasUpgrade1_defaultTtl(metadata)).isTrue();
     assertThat(metadata.getTable("autocomplete_tags")).isNotNull();
@@ -59,7 +59,7 @@ abstract class ITEnsureSchema {
 
     Schema.ensureExists(keyspace(), session());
 
-    KeyspaceMetadata metadata = session().getCluster().getMetadata().getKeyspace(keyspace());
+    KeyspaceMetadata metadata = session().getMetadata().getKeyspace(keyspace()).get();
     assertThat(metadata).isNotNull();
     assertThat(Schema.hasUpgrade1_defaultTtl(metadata)).isTrue();
     assertThat(Schema.hasUpgrade2_autocompleteTags(metadata)).isTrue();

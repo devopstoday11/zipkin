@@ -13,15 +13,15 @@
  */
 package zipkin2.storage.cassandra.v1;
 
-import com.datastax.driver.core.PreparedStatement;
-import com.datastax.driver.core.Session;
-import com.datastax.driver.core.querybuilder.Insert;
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.PreparedStatement;
+import com.datastax.oss.driver.api.querybuilder.insert.RegularInsert;
 import java.nio.ByteBuffer;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map.Entry;
+import java.util.Map;
 import java.util.Set;
 import zipkin2.Annotation;
 import zipkin2.Call;
@@ -35,6 +35,7 @@ import zipkin2.storage.cassandra.internal.call.InsertEntry;
 import zipkin2.v1.V1Span;
 import zipkin2.v1.V2SpanConverter;
 
+import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.literal;
 import static zipkin2.storage.cassandra.v1.CassandraUtil.annotationKeys;
 import static zipkin2.storage.cassandra.v1.Tables.AUTOCOMPLETE_TAGS;
 
@@ -54,7 +55,7 @@ final class CassandraSpanConsumer implements SpanConsumer {
   @Nullable final IndexTraceIdByAnnotation indexTraceIdByAnnotation;
 
   CassandraSpanConsumer(CassandraStorage storage) {
-    Session session = storage.session();
+    CqlSession session = storage.session();
     Schema.Metadata metadata = storage.metadata();
     searchEnabled = storage.searchEnabled;
     autocompleteKeys = new LinkedHashSet<>(storage.autocompleteKeys);
@@ -96,8 +97,8 @@ final class CassandraSpanConsumer implements SpanConsumer {
       session, autocompleteTtl, autocompleteCardinality, indexTtl
     ) {
       // bucket is deprecated on this index
-      @Override protected PreparedStatement prepare(Session session, Insert insert) {
-        return session.prepare(insert.value("bucket", 0));
+      @Override protected PreparedStatement prepare(CqlSession session, RegularInsert insert) {
+        return session.prepare(insert.value("bucket", literal(0)).build());
       }
     };
     indexTraceIdBySpanName = new IndexTraceIdBySpanName(storage, indexTtl);
@@ -146,9 +147,9 @@ final class CassandraSpanConsumer implements SpanConsumer {
 
     // Using set or other deduplication strategies helps avoid redundant writes.
     Set<String> insertServiceNames = new LinkedHashSet<>();
-    Set<Entry<String, String>> insertRemoteServiceNames = new LinkedHashSet<>();
-    Set<Entry<String, String>> insertSpanNames = new LinkedHashSet<>();
-    Set<Entry<String, String>> insertAutocompleteTags = new LinkedHashSet<>();
+    Set<Map.Entry<String, String>> insertRemoteServiceNames = new LinkedHashSet<>();
+    Set<Map.Entry<String, String>> insertSpanNames = new LinkedHashSet<>();
+    Set<Map.Entry<String, String>> insertAutocompleteTags = new LinkedHashSet<>();
     TraceIdIndexer indexTraceIdByServiceNames = indexTraceIdByServiceName.newIndexer();
     TraceIdIndexer indexTraceIdByRemoteServiceNames = indexTraceIdByRemoteServiceName != null
       ? indexTraceIdByRemoteServiceName.newIndexer()
@@ -192,7 +193,7 @@ final class CassandraSpanConsumer implements SpanConsumer {
       }
 
       if (insertAutocompleteValue != null) {
-        for (Entry<String, String> entry : span.tags().entrySet()) {
+        for (Map.Entry<String, String> entry : span.tags().entrySet()) {
           if (autocompleteKeys.contains(entry.getKey())) insertAutocompleteTags.add(entry);
         }
       }
@@ -226,13 +227,13 @@ final class CassandraSpanConsumer implements SpanConsumer {
     for (String insert : insertServiceNames) {
       insertServiceName.maybeAdd(insert, calls);
     }
-    for (Entry<String, String> insert : insertRemoteServiceNames) {
+    for (Map.Entry<String, String> insert : insertRemoteServiceNames) {
       insertRemoteServiceName.maybeAdd(insert, calls);
     }
-    for (Entry<String, String> insert : insertSpanNames) {
+    for (Map.Entry<String, String> insert : insertSpanNames) {
       insertSpanName.maybeAdd(insert, calls);
     }
-    for (Entry<String, String> insert : insertAutocompleteTags) {
+    for (Map.Entry<String, String> insert : insertAutocompleteTags) {
       insertAutocompleteValue.maybeAdd(insert, calls);
     }
     for (IndexTraceId.Input insert : indexTraceIdByServiceNames) {
