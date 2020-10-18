@@ -112,13 +112,15 @@ public abstract class CassandraStorageBuilder<B extends CassandraStorageBuilder<
    * Name of the datacenter that will be considered "local" for latency load balancing. When unset,
    * load-balancing is round-robin.
    */
-  public B localDc(@Nullable String localDc) {
+  public B localDc(String localDc) {
+    if (localDc == null) throw new NullPointerException("localDc == null");
     this.localDc = localDc;
     return (B) this;
   }
 
   /** Max pooled connections per datacenter-local host. Defaults to 8 */
   public B maxConnections(int maxConnections) {
+    if (maxConnections <= 0) throw new IllegalArgumentException("maxConnections <= 0");
     this.poolLocalSize = maxConnections;
     return (B) this;
   }
@@ -160,6 +162,7 @@ public abstract class CassandraStorageBuilder<B extends CassandraStorageBuilder<
    * number of results.
    */
   public B maxTraceCols(int maxTraceCols) {
+    if (maxTraceCols <= 0) throw new IllegalArgumentException("maxTraceCols <= 0");
     this.maxTraceCols = maxTraceCols;
     return (B) this;
   }
@@ -176,6 +179,7 @@ public abstract class CassandraStorageBuilder<B extends CassandraStorageBuilder<
    * 1.
    */
   public B indexFetchMultiplier(int indexFetchMultiplier) {
+    if (indexFetchMultiplier <= 0) throw new IllegalArgumentException("indexFetchMultiplier <= 0");
     this.indexFetchMultiplier = indexFetchMultiplier;
     return (B) this;
   }

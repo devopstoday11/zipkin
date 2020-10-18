@@ -105,8 +105,8 @@ zipkin:
     cassandra:
       # Comma separated list of host addresses part of Cassandra cluster. Ports default to 9042 but you can also specify a custom port with 'host:port'.
       contact-points: ${CASSANDRA_CONTACT_POINTS:localhost}
-      # Name of the datacenter that will be considered "local" for latency load balancing. When unset, load-balancing is round-robin.
-      local-dc: ${CASSANDRA_LOCAL_DC:}
+      # Name of the datacenter that will be considered "local" for load balancing.
+      local-dc: ${CASSANDRA_LOCAL_DC:datacenter1}
       # Will throw an exception on startup if authentication fails.
       username: ${CASSANDRA_USERNAME:}
       password: ${CASSANDRA_PASSWORD:}
