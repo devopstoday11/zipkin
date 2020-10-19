@@ -48,14 +48,13 @@ class InternalForTests {
   static void writeDependencyLinks(
     CassandraStorage storage, List<DependencyLink> links, long midnightUTC) {
     for (DependencyLink link : links) {
-      SimpleStatement statement =
-        QueryBuilder.insertInto(Schema.TABLE_DEPENDENCY)
-          .value("day",
-            literal(Instant.ofEpochMilli(midnightUTC).atZone(ZoneOffset.UTC).toLocalDate()))
-          .value("parent", literal(link.parent()))
-          .value("child", literal(link.child()))
-          .value("calls", literal(link.callCount()))
-          .value("errors", literal(link.errorCount())).build();
+      SimpleStatement statement = QueryBuilder.insertInto(Schema.TABLE_DEPENDENCY)
+        .value("day",
+          literal(Instant.ofEpochMilli(midnightUTC).atZone(ZoneOffset.UTC).toLocalDate()))
+        .value("parent", literal(link.parent()))
+        .value("child", literal(link.child()))
+        .value("calls", literal(link.callCount()))
+        .value("errors", literal(link.errorCount())).build();
       storage.session().execute(statement);
     }
   }

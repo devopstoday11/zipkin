@@ -54,6 +54,17 @@ final class CassandraSpanConsumer implements SpanConsumer {
   @Nullable final IndexTraceIdBySpanName indexTraceIdBySpanName;
   @Nullable final IndexTraceIdByAnnotation indexTraceIdByAnnotation;
 
+  void clear() {
+    if (insertServiceName != null) insertServiceName.clear();
+    if (insertRemoteServiceName != null) insertRemoteServiceName.clear();
+    if (insertSpanName != null) insertSpanName.clear();
+    if (insertAutocompleteValue != null) insertAutocompleteValue.clear();
+    if (indexTraceIdByServiceName != null) indexTraceIdByServiceName.clear();
+    if (indexTraceIdByRemoteServiceName != null) indexTraceIdByRemoteServiceName.clear();
+    if (indexTraceIdBySpanName != null) indexTraceIdBySpanName.clear();
+    if (indexTraceIdByAnnotation != null) indexTraceIdByAnnotation.clear();
+  }
+
   CassandraSpanConsumer(CassandraStorage storage) {
     CqlSession session = storage.session();
     Schema.Metadata metadata = storage.metadata();

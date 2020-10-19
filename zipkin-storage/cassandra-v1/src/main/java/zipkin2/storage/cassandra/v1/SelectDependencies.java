@@ -30,6 +30,7 @@ import zipkin2.storage.cassandra.internal.call.ResultSetFutureCall;
 
 import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.bindMarker;
 import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.selectFrom;
+import static zipkin2.storage.cassandra.v1.Tables.DEPENDENCIES;
 
 final class SelectDependencies extends ResultSetFutureCall<List<DependencyLink>> {
   static final class Factory {
@@ -38,7 +39,7 @@ final class SelectDependencies extends ResultSetFutureCall<List<DependencyLink>>
 
     Factory(CqlSession session) {
       this.session = session;
-      this.preparedStatement = session.prepare(selectFrom("dependencies").column("dependencies")
+      this.preparedStatement = session.prepare(selectFrom(DEPENDENCIES).column("dependencies")
         .whereColumn("day").in(bindMarker()).build());
     }
 

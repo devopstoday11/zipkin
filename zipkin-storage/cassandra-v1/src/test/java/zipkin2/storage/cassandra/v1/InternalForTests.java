@@ -35,6 +35,7 @@ import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.insertInto;
 import static java.util.Collections.singletonMap;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static zipkin2.storage.cassandra.v1.Tables.DEPENDENCIES;
 import static zipkin2.storage.cassandra.v1.Tables.REMOTE_SERVICE_NAMES;
 import static zipkin2.storage.cassandra.v1.Tables.TRACES;
 
@@ -70,7 +71,7 @@ class InternalForTests {
     CassandraStorage storage, List<DependencyLink> links, long midnightUTC) {
     Dependencies deps = Dependencies.create(midnightUTC, midnightUTC /* ignored */, links);
     ByteBuffer thrift = deps.toThrift();
-    PreparedStatement prepared = storage.session().prepare(insertInto("dependencies")
+    PreparedStatement prepared = storage.session().prepare(insertInto(DEPENDENCIES)
       .value("day", bindMarker())
       .value("dependencies", bindMarker()).build());
 

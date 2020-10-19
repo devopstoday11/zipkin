@@ -13,17 +13,10 @@
  */
 package zipkin2.storage.cassandra;
 
-import com.codahale.metrics.Gauge;
 import com.datastax.oss.driver.api.core.CqlSession;
-import com.datastax.oss.driver.api.core.metadata.Node;
-import com.datastax.oss.driver.api.core.metadata.schema.KeyspaceMetadata;
-import com.datastax.oss.driver.api.core.metrics.DefaultNodeMetric;
-import com.datastax.oss.driver.api.core.metrics.Metrics;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -36,26 +29,35 @@ import zipkin2.Endpoint;
 import zipkin2.Span;
 import zipkin2.TestObjects;
 import zipkin2.storage.QueryRequest;
-import zipkin2.storage.StorageComponent;
+import zipkin2.storage.StorageComponent.Builder;
 
+import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static zipkin2.TestObjects.DAY;
 import static zipkin2.TestObjects.TODAY;
 import static zipkin2.storage.cassandra.InternalForTests.writeDependencyLinks;
+import static zipkin2.storage.cassandra.Schema.TABLE_AUTOCOMPLETE_TAGS;
+import static zipkin2.storage.cassandra.Schema.TABLE_SERVICE_REMOTE_SERVICES;
+import static zipkin2.storage.cassandra.Schema.TABLE_SERVICE_SPANS;
+import static zipkin2.storage.cassandra.Schema.TABLE_TRACE_BY_SERVICE_REMOTE_SERVICE;
+import static zipkin2.storage.cassandra.Schema.TABLE_TRACE_BY_SERVICE_SPAN;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ITCassandraStorage {
+  static final List<String> SEARCH_TABLES = asList(
+    TABLE_AUTOCOMPLETE_TAGS,
+    TABLE_SERVICE_REMOTE_SERVICES,
+    TABLE_SERVICE_SPANS,
+    TABLE_TRACE_BY_SERVICE_REMOTE_SERVICE,
+    TABLE_TRACE_BY_SERVICE_SPAN
+  );
 
   @RegisterExtension CassandraStorageExtension backend = new CassandraStorageExtension(
     "openzipkin/zipkin-cassandra:2.21.7");
 
   @Nested
   class ITTraces extends zipkin2.storage.ITTraces<CassandraStorage> {
-    @Override protected boolean initializeStoragePerTest() {
-      return true;
-    }
-
-    @Override protected StorageComponent.Builder newStorageBuilder(TestInfo testInfo) {
+    @Override protected Builder newStorageBuilder(TestInfo testInfo) {
       return backend.newStorageBuilder(testInfo);
     }
 
@@ -64,21 +66,17 @@ class ITCassandraStorage {
     }
 
     @Override protected void blockWhileInFlight() {
-      ITCassandraStorage.blockWhileInFlight(storage);
+      CassandraStorageExtension.blockWhileInFlight(storage);
     }
 
     @Override public void clear() {
-      // Just let the data pile up to prevent warnings and slowness.
+      backend.clear(storage);
     }
   }
 
   @Nested
   class ITSpanStore extends zipkin2.storage.ITSpanStore<CassandraStorage> {
-    @Override protected boolean initializeStoragePerTest() {
-      return true;
-    }
-
-    @Override protected StorageComponent.Builder newStorageBuilder(TestInfo testInfo) {
+    @Override protected Builder newStorageBuilder(TestInfo testInfo) {
       return backend.newStorageBuilder(testInfo);
     }
 
@@ -135,56 +133,45 @@ class ITCassandraStorage {
           .putTag("host.name", "host1")
           .build());
       }
-      QueryRequest queryRequest =
-        requestBuilder()
-          .parseAnnotationQuery("host.name=host1")
-          .serviceName(endpoint.serviceName())
-          .limit(queryLimit)
-          .build();
+      QueryRequest queryRequest = requestBuilder()
+        .parseAnnotationQuery("host.name=host1")
+        .serviceName(endpoint.serviceName())
+        .limit(queryLimit)
+        .build();
       assertThat(store().getTraces(queryRequest).execute()).hasSize(queryLimit);
     }
 
-    @Override public void clear() {
-      // Just let the data pile up to prevent warnings and slowness.
+    @Override protected void blockWhileInFlight() {
+      CassandraStorageExtension.blockWhileInFlight(storage);
     }
 
-    @Override protected void blockWhileInFlight() {
-      ITCassandraStorage.blockWhileInFlight(storage);
+    @Override public void clear() {
+      backend.clear(storage);
     }
   }
 
   @Nested
   class ITSearchEnabledFalse extends zipkin2.storage.ITSearchEnabledFalse<CassandraStorage> {
-
-    @Override protected boolean initializeStoragePerTest() {
-      return true;
-    }
-
-    @Override protected StorageComponent.Builder newStorageBuilder(TestInfo testInfo) {
+    @Override protected Builder newStorageBuilder(TestInfo testInfo) {
       return backend.newStorageBuilder(testInfo);
     }
 
-    @Test void doesntCreateIndexes() {
-      KeyspaceMetadata metadata =
-        storage.session().getMetadata().getKeyspace(storage.keyspace).get();
-
-      assertThat(metadata.getTable("trace_by_service_span")).isEmpty();
-      assertThat(metadata.getTable("span_by_service")).isEmpty();
+    @Override protected void blockWhileInFlight() {
+      CassandraStorageExtension.blockWhileInFlight(storage);
     }
 
     @Override public void clear() {
-      // Just let the data pile up to prevent warnings and slowness.
-    }
-
-    @Override protected void blockWhileInFlight() {
-      ITCassandraStorage.blockWhileInFlight(storage);
+      backend.clear(storage);
     }
   }
 
   @Nested
   class ITStrictTraceIdFalse extends zipkin2.storage.ITStrictTraceIdFalse<CassandraStorage> {
-
     CassandraStorage strictTraceId;
+
+    @Override protected Builder newStorageBuilder(TestInfo testInfo) {
+      return backend.newStorageBuilder(testInfo);
+    }
 
     @BeforeEach void initializeStorageBeforeSwitch() {
       strictTraceId = CassandraStorageExtension.newStorageBuilder(storage.contactPoints)
@@ -199,18 +186,6 @@ class ITCassandraStorage {
       }
     }
 
-    @Override protected boolean initializeStoragePerTest() {
-      return true;
-    }
-
-    @Override protected StorageComponent.Builder newStorageBuilder(TestInfo testInfo) {
-      return backend.newStorageBuilder(testInfo);
-    }
-
-    @Override public void clear() {
-      // Just let the data pile up to prevent warnings and slowness.
-    }
-
     /** Ensures we can still lookup fully 128-bit traces when strict trace ID id disabled */
     @Test public void getTraces_128BitTraceId() throws IOException {
       getTraces_128BitTraceId(accept128BitTrace(strictTraceId));
@@ -223,62 +198,58 @@ class ITCassandraStorage {
       assertThat(sortTrace(traces().getTrace(trace.get(0).traceId()).execute()))
         .containsExactlyElementsOf(trace);
     }
+
+    @Override protected void blockWhileInFlight() {
+      CassandraStorageExtension.blockWhileInFlight(storage);
+    }
+
+    @Override public void clear() {
+      backend.clear(storage);
+    }
   }
 
   @Nested
   class ITServiceAndSpanNames extends zipkin2.storage.ITServiceAndSpanNames<CassandraStorage> {
-    @Override protected boolean initializeStoragePerTest() {
-      return true;
-    }
-
-    @Override protected StorageComponent.Builder newStorageBuilder(TestInfo testInfo) {
+    @Override protected Builder newStorageBuilder(TestInfo testInfo) {
       return backend.newStorageBuilder(testInfo);
     }
 
     @Override protected void blockWhileInFlight() {
-      ITCassandraStorage.blockWhileInFlight(storage);
+      CassandraStorageExtension.blockWhileInFlight(storage);
     }
 
     @Override public void clear() {
-      // Just let the data pile up to prevent warnings and slowness.
+      backend.clear(storage);
     }
   }
 
   @Nested
   class ITAutocompleteTags extends zipkin2.storage.ITAutocompleteTags<CassandraStorage> {
-    @Override protected boolean initializeStoragePerTest() {
-      return true;
-    }
-
-    @Override protected StorageComponent.Builder newStorageBuilder(TestInfo testInfo) {
+    @Override protected Builder newStorageBuilder(TestInfo testInfo) {
       return backend.newStorageBuilder(testInfo);
     }
 
     @Override protected void blockWhileInFlight() {
-      ITCassandraStorage.blockWhileInFlight(storage);
+      CassandraStorageExtension.blockWhileInFlight(storage);
     }
 
     @Override public void clear() {
-      // Just let the data pile up to prevent warnings and slowness.
+      backend.clear(storage);
     }
   }
 
   @Nested
   class ITDependencies extends zipkin2.storage.ITDependencies<CassandraStorage> {
-    @Override protected boolean initializeStoragePerTest() {
-      return true;
-    }
-
-    @Override protected StorageComponent.Builder newStorageBuilder(TestInfo testInfo) {
+    @Override protected Builder newStorageBuilder(TestInfo testInfo) {
       return backend.newStorageBuilder(testInfo);
     }
 
     @Override protected void blockWhileInFlight() {
-      ITCassandraStorage.blockWhileInFlight(storage);
+      CassandraStorageExtension.blockWhileInFlight(storage);
     }
 
     @Override public void clear() {
-      // Just let the data pile up to prevent warnings and slowness.
+      backend.clear(storage);
     }
 
     /**
@@ -288,6 +259,7 @@ class ITCassandraStorage {
     @Override protected void processDependencies(List<Span> spans) {
       aggregateLinks(spans).forEach(
         (midnight, links) -> writeDependencyLinks(storage, links, midnight));
+      blockWhileInFlight();
     }
   }
 
@@ -314,35 +286,16 @@ class ITCassandraStorage {
 
   @Nested
   class ITSpanConsumer extends zipkin2.storage.cassandra.ITSpanConsumer {
-    @Override protected StorageComponent.Builder newStorageBuilder(TestInfo testInfo) {
+    @Override protected Builder newStorageBuilder(TestInfo testInfo) {
       return backend.newStorageBuilder(testInfo);
     }
-  }
 
-  static void blockWhileInFlight(CassandraStorage storage) {
-    // Now, block until writes complete, notably so we can read them.
-    while (true) {
-      if (!poolInFlight(storage.session.get())) return;
-      try {
-        Thread.sleep(100);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        throw new AssertionError(e);
-      }
+    @Override protected void blockWhileInFlight() {
+      CassandraStorageExtension.blockWhileInFlight(storage);
     }
-  }
 
-  // Use metrics to wait for in-flight requests to settle per
-  // https://groups.google.com/a/lists.datastax.com/g/java-driver-user/c/5um_yGNynow/m/cInH5I5jBgAJ
-  static boolean poolInFlight(CqlSession session) {
-    Collection<Node> nodes = session.getMetadata().getNodes().values();
-    Optional<Metrics> metrics = session.getMetrics();
-    for (Node node : nodes) {
-      int inFlight = metrics.flatMap(m -> m.getNodeMetric(node, DefaultNodeMetric.IN_FLIGHT))
-        .map(m -> ((Gauge<Integer>) m).getValue())
-        .orElse(0);
-      if (inFlight > 0) return true;
+    @Override public void clear() {
+      backend.clear(storage);
     }
-    return false;
   }
 }

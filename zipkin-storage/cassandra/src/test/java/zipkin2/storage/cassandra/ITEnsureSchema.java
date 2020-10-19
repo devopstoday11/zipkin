@@ -25,6 +25,9 @@ import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 import static zipkin2.TestObjects.CLIENT_SPAN;
 import static zipkin2.TestObjects.DAY;
 import static zipkin2.TestObjects.TODAY;
+import static zipkin2.storage.cassandra.ITCassandraStorage.SEARCH_TABLES;
+import static zipkin2.storage.cassandra.Schema.TABLE_DEPENDENCY;
+import static zipkin2.storage.cassandra.Schema.TABLE_SPAN;
 
 abstract class ITEnsureSchema {
 
@@ -48,18 +51,27 @@ abstract class ITEnsureSchema {
     Schema.ensureExists(keyspace(), false, session());
 
     KeyspaceMetadata metadata = session().getMetadata().getKeyspace(keyspace()).get();
-    assertThat(metadata.getTable("span")).isPresent();
+    assertThat(metadata.getTable(TABLE_SPAN)).isPresent();
+    assertThat(metadata.getTable(TABLE_DEPENDENCY)).isPresent();
+
+    for (String searchTable : SEARCH_TABLES) {
+      assertThat(metadata.getTable(searchTable))
+        .withFailMessage("Expected to not find " + searchTable).isEmpty();
+    }
   }
 
-  @Test void installsIndexesWhenMissing() {
+  @Test void installsSearchTablesWhenMissing() {
     session().execute("CREATE KEYSPACE " + keyspace()
       + " WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '1'};");
 
     Schema.ensureExists(keyspace(), true, session());
 
     KeyspaceMetadata metadata = session().getMetadata().getKeyspace(keyspace()).get();
-    assertThat(metadata.getTable("trace_by_service_span")).isPresent();
-    assertThat(metadata.getTable("autocomplete_tags")).isPresent();
+
+    for (String searchTable : SEARCH_TABLES) {
+      assertThat(metadata.getTable(searchTable))
+        .withFailMessage("Expected to find " + searchTable).isPresent();
+    }
   }
 
   @Test void upgradesOldSchema_autocomplete() {

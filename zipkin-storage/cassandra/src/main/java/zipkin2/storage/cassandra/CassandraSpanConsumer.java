@@ -48,6 +48,12 @@ class CassandraSpanConsumer implements SpanConsumer { // not final for testing
   @Nullable final InsertEntry.Factory insertServiceRemoteService;
   @Nullable final InsertEntry.Factory insertAutocompleteValue;
 
+  void clear() {
+    if (insertServiceSpan != null) insertServiceSpan.clear();
+    if (insertServiceRemoteService != null) insertServiceRemoteService.clear();
+    if (insertAutocompleteValue != null) insertAutocompleteValue.clear();
+  }
+
   CassandraSpanConsumer(CassandraStorage storage) {
     this(
       storage.session(), storage.metadata(),

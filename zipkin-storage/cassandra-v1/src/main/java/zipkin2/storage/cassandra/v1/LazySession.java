@@ -55,6 +55,9 @@ final class LazySession {
 
   void close() {
     CqlSession maybeSession = session;
-    if (maybeSession != null) maybeSession.close();
+    if (maybeSession != null) {
+      session.close();
+      session = null;
+    }
   }
 }

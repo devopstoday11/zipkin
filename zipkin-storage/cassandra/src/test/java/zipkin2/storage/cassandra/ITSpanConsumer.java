@@ -23,7 +23,6 @@ import zipkin2.Span;
 import zipkin2.TestObjects;
 import zipkin2.internal.AggregateCall;
 import zipkin2.storage.ITStorage;
-import zipkin2.storage.SpanConsumer;
 import zipkin2.storage.StorageComponent;
 import zipkin2.storage.cassandra.internal.call.InsertEntry;
 
@@ -32,17 +31,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static zipkin2.TestObjects.FRONTEND;
 
 abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
-
-  @Override protected boolean initializeStoragePerTest() {
-    return true;
-  }
-
   @Override protected void configureStorageForTest(StorageComponent.Builder storage) {
     storage.autocompleteKeys(asList("environment"));
-  }
-
-  @Override public void clear() {
-    // Just let the data pile up to prevent warnings and slowness.
   }
 
   /**
@@ -50,9 +40,7 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
    * to index rows who have no duration.
    */
   @Test public void doesntIndexSpansMissingDuration() throws IOException {
-    Span span = Span.newBuilder().traceId("1").id("1").name("get").duration(0L).build();
-
-    accept(storage.spanConsumer(), span);
+    accept(Span.newBuilder().traceId("1").id("1").name("get").duration(0L).build());
 
     assertThat(rowCountForTraceByServiceSpan(storage)).isZero();
   }
@@ -73,12 +61,11 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
       .name("get")
       .kind(Span.Kind.CLIENT)
       .localEndpoint(FRONTEND)
-      .timestamp(
-        trace[0].timestamp() + i * 1000) // all peer span timestamps happen a millisecond later
+      .timestamp(trace[0].timestampAsLong() + i * 1000) // all peer span timestamps happen 1ms later
       .duration(10L)
       .build());
 
-    accept(storage.spanConsumer(), trace);
+    accept(trace);
     assertThat(rowCountForTraceByServiceSpan(storage))
       .isGreaterThanOrEqualTo(4L);
     assertThat(rowCountForTraceByServiceSpan(storage))
@@ -91,7 +78,8 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
     );
 
     // sanity check base case
-    accept(withoutStrictTraceId, trace);
+    withoutStrictTraceId.accept(asList(trace)).execute();
+    blockWhileInFlight();
 
     assertThat(rowCountForTraceByServiceSpan(storage))
       .isGreaterThanOrEqualTo(120L); // TODO: magic number
@@ -116,7 +104,7 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
       .duration(10L)
       .build());
 
-    accept(storage.spanConsumer(), trace);
+    accept(trace);
 
     assertThat(rowCountForTags(storage))
       .isEqualTo(1L); // Since tag {a,b} are not in the whitelist
@@ -138,10 +126,6 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
     assertThat(insertEntryCalls.get(1))
       .hasToString(
         "InsertEntry{table=remote_service_by_service, service=frontend, remote_service=backend}");
-  }
-
-  void accept(SpanConsumer consumer, Span... spans) throws IOException {
-    consumer.accept(asList(spans)).execute();
   }
 
   static long rowCountForTraceByServiceSpan(CassandraStorage storage) {

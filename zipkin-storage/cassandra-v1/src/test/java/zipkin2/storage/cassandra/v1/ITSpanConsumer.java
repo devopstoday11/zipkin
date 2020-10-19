@@ -18,7 +18,6 @@ import org.junit.jupiter.api.Test;
 import zipkin2.Span;
 import zipkin2.TestObjects;
 import zipkin2.storage.ITStorage;
-import zipkin2.storage.SpanConsumer;
 import zipkin2.storage.StorageComponent;
 
 import static java.util.Arrays.asList;
@@ -26,17 +25,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static zipkin2.TestObjects.FRONTEND;
 
 abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
-
-  @Override protected boolean initializeStoragePerTest() {
-    return true;
-  }
-
   @Override protected void configureStorageForTest(StorageComponent.Builder storage) {
     storage.autocompleteKeys(asList("environment"));
-  }
-
-  @Override public void clear() {
-    // Just let the data pile up to prevent warnings and slowness.
   }
 
   /**
@@ -45,12 +35,10 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
    * indexing of such annotations dramatically reduces the load on cassandra and size of indexes.
    */
   @Test public void doesntIndexCoreOrNonStringAnnotations() throws IOException {
-    accept(storage.spanConsumer(), TestObjects.CLIENT_SPAN);
+    accept(TestObjects.CLIENT_SPAN);
 
-    assertThat(
-      storage.session()
-        .execute("SELECT blobastext(annotation) from annotations_index")
-        .all())
+    assertThat(storage.session().execute("SELECT blobastext(annotation) from annotations_index")
+      .all())
       .extracting(r -> r.getString(0))
       .containsExactlyInAnyOrder(
         "frontend:http.path",
@@ -71,35 +59,28 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
     long rootTimestamp = trace[0].timestampAsLong();
 
     for (int i = 0; i < 100; i++) {
-      trace[i + 1] =
-        Span.newBuilder()
-          .traceId(trace[0].traceId())
-          .parentId(trace[0].id())
-          .id(i + 1)
-          .name(String.valueOf(i + 1))
-          .timestamp(rootTimestamp + i * 1000L) // child span timestamps happen 1 ms later
-          .addAnnotation(trace[0].annotations().get(0).timestamp() + i * 1000, "bar")
-          .build();
+      trace[i + 1] = Span.newBuilder()
+        .traceId(trace[0].traceId())
+        .parentId(trace[0].id())
+        .id(i + 1)
+        .name(String.valueOf(i + 1))
+        .timestamp(rootTimestamp + i * 1000L) // child span timestamps happen 1 ms later
+        .addAnnotation(trace[0].annotations().get(0).timestamp() + i * 1000, "bar")
+        .build();
     }
 
-    accept(storage.spanConsumer(), trace);
+    accept(trace);
     assertThat(rowCount(Tables.ANNOTATIONS_INDEX)).isEqualTo(5L);
     assertThat(rowCount(Tables.SERVICE_REMOTE_SERVICE_NAME_INDEX)).isEqualTo(1L);
     assertThat(rowCount(Tables.SERVICE_NAME_INDEX)).isEqualTo(1L);
     assertThat(rowCount(Tables.SERVICE_SPAN_NAME_INDEX)).isEqualTo(1L);
 
     // redundant store doesn't change the indexes
-    accept(storage.spanConsumer(), trace);
+    accept(trace);
     assertThat(rowCount(Tables.ANNOTATIONS_INDEX)).isEqualTo(5L);
     assertThat(rowCount(Tables.SERVICE_REMOTE_SERVICE_NAME_INDEX)).isEqualTo(1L);
     assertThat(rowCount(Tables.SERVICE_NAME_INDEX)).isEqualTo(1L);
     assertThat(rowCount(Tables.SERVICE_SPAN_NAME_INDEX)).isEqualTo(1L);
-  }
-
-  void accept(SpanConsumer consumer, Span... spans) throws IOException {
-    consumer.accept(asList(spans)).execute();
-    // Now, block until writes complete, notably so we can read them.
-    ITCassandraStorage.blockWhileInFlight(storage);
   }
 
   long rowCount(String table) {
@@ -129,10 +110,10 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
       .putTag("environment", "dev")
       .putTag("a", "b")
       .localEndpoint(FRONTEND)
-      .timestamp(trace[0].timestampAsLong() + 1000L) // child span timestamps happen 1 ms later
+      .timestamp(trace[0].timestampAsLong() + 1000L) // child span timestamps happen 1ms later
       .addAnnotation(trace[0].annotations().get(0).timestamp() + 1000L, "bar")
       .build();
-    accept(storage.spanConsumer(), trace);
+    accept(trace);
 
     assertThat(rowCount(Tables.AUTOCOMPLETE_TAGS))
       .isGreaterThanOrEqualTo(1L);
