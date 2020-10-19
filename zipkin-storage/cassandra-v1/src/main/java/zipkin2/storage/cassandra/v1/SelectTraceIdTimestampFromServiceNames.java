@@ -46,7 +46,7 @@ final class SelectTraceIdTimestampFromServiceNames
   @Override void bindPartitionKey(BoundStatementBuilder bound, List<String> serviceNames) {
     bound
       .setList(0, serviceNames, String.class)
-      .setSet(1, BUCKETS, int.class);
+      .setList(1, BUCKETS, Integer.class);
   }
 
   Call.FlatMapper<List<String>, Set<Pair>> newFlatMapper(long endTs, long lookback, int limit) {

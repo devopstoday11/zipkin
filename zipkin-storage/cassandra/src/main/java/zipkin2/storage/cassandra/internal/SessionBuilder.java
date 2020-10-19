@@ -26,11 +26,14 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import zipkin2.internal.Nullable;
 
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_CONSISTENCY;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_DEFAULT_IDEMPOTENCE;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_LOGGER_SUCCESS_ENABLED;
+import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_LOGGER_VALUES;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_TIMEOUT;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_TRACKER_CLASS;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_WARN_IF_SET_KEYSPACE;
@@ -47,7 +50,11 @@ public final class SessionBuilder {
   ) {
     // Some options aren't supported by builder methods. In these cases, we use driver config
     // See https://groups.google.com/a/lists.datastax.com/forum/#!topic/java-driver-user/Z8HrCDX47Q0
-    ProgrammaticDriverConfigLoaderBuilder config = DriverConfigLoader.programmaticBuilder();
+    ProgrammaticDriverConfigLoaderBuilder config =
+      // We aren't reading any resources from the classpath, but this prevents errors running in the
+      // server, where Thread.currentThread().getContextClassLoader() returns null
+      DriverConfigLoader.programmaticBuilder(SessionBuilder.class.getClassLoader());
+
     // Ported from java-driver v3 PoolingOptions.setPoolTimeoutMillis as request timeout includes that
     config.withDuration(REQUEST_TIMEOUT, Duration.ofMinutes(1));
 
@@ -71,9 +78,14 @@ public final class SessionBuilder {
 
     if (useSsl) config = config.withClass(SSL_ENGINE_FACTORY_CLASS, DefaultSslEngineFactory.class);
 
-    // Always ensures log categories can enable query logging
-    config = config.withClass(REQUEST_TRACKER_CLASS, RequestLogger.class);
-    config = config.withBoolean(REQUEST_LOGGER_SUCCESS_ENABLED, true);
+    // Log categories can enable query logging
+    Logger requestLogger = LoggerFactory.getLogger(RequestLogger.class);
+    if (requestLogger.isDebugEnabled()) {
+      config = config.withClass(REQUEST_TRACKER_CLASS, RequestLogger.class);
+      config = config.withBoolean(REQUEST_LOGGER_SUCCESS_ENABLED, true);
+      // Only show bodies when TRACE is enabled
+      config = config.withBoolean(REQUEST_LOGGER_VALUES, requestLogger.isTraceEnabled());
+    }
 
     // Don't warn: ensureSchema creates the keyspace. Hence, we need to "use" it later.
     config = config.withBoolean(REQUEST_WARN_IF_SET_KEYSPACE, false);

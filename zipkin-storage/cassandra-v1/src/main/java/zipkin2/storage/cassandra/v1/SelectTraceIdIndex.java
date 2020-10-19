@@ -17,7 +17,6 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import com.datastax.oss.driver.api.core.cql.BoundStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
-import com.datastax.oss.driver.api.core.metadata.schema.ClusteringOrder;
 import com.datastax.oss.driver.api.querybuilder.select.Select;
 import com.google.auto.value.AutoValue;
 import java.util.Set;
@@ -54,17 +53,21 @@ final class SelectTraceIdIndex<K> extends ResultSetFutureCall<AsyncResultSet> {
     final CqlSession session;
     final String table, partitionKeyColumn;
     final PreparedStatement preparedStatement;
+    final int firstMarkerIndex;
 
     Factory(CqlSession session, String table, String partitionKeyColumn) {
       this.session = session;
       this.table = table;
       this.partitionKeyColumn = partitionKeyColumn;
+      // Tables queried hare defined CLUSTERING ORDER BY "ts".
+      // We don't use orderBy in queries per: https://www.datastax.com/blog/we-shall-have-order
+      // Sorting is done client-side via sortTraceIdsByDescTimestamp()
       Select select = declarePartitionKey(selectFrom(table).columns("trace_id", "ts"))
         .whereColumn("ts").isGreaterThanOrEqualTo(bindMarker())
         .whereColumn("ts").isLessThanOrEqualTo(bindMarker())
-        .limit(bindMarker())
-        .orderBy("ts", ClusteringOrder.DESC);
+        .limit(bindMarker());
       preparedStatement = session.prepare(select.build());
+      firstMarkerIndex = preparedStatement.getVariableDefinitions().size() - 3;
     }
 
     Select declarePartitionKey(Select select) {
@@ -90,10 +93,11 @@ final class SelectTraceIdIndex<K> extends ResultSetFutureCall<AsyncResultSet> {
     BoundStatementBuilder bound = factory.preparedStatement.boundStatementBuilder();
     factory.bindPartitionKey(bound, input.partitionKey());
 
+    int i = factory.firstMarkerIndex;
     return factory.session.executeAsync(bound
-      .setBytesUnsafe(1, TimestampCodec.serialize(input.start_ts()))
-      .setBytesUnsafe(2, TimestampCodec.serialize(input.end_ts()))
-      .setInt(3, input.limit_())
+      .setBytesUnsafe(i, TimestampCodec.serialize(input.start_ts()))
+      .setBytesUnsafe(i + 1, TimestampCodec.serialize(input.end_ts()))
+      .setInt(i + 2, input.limit_())
       .setPageSize(input.limit_()).build());
   }
 

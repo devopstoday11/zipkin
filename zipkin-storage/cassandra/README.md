@@ -16,12 +16,10 @@ zipkin-server).
 
 Zipkin's storage layer logs to the category "zipkin2.storage.cassandra",
 but you may wish to see the entire "zipkin2" when troubleshooting.
-Depending on details desired, the underlying driver's category
-"com.datastax.oss.driver.api.core.cql" at debug level may help.
 
-If you just want to see queries and latency, set the category
-"com.datastax.oss.driver.api.core.cql.QueryLogger" to debug or trace. Trace level
-includes bound values.
+If you want to see requests and latency, set the logging category
+"com.datastax.oss.driver.internal.core.tracker.RequestLogger" to DEBUG.
+TRACE includes query values.
 
 See [Request Logger](https://docs.datastax.com/en/developer/java-driver/4.9/manual/core/request_tracker/#request-logger) for more details.
 
@@ -166,7 +164,7 @@ and reduces size on disk by not amplifying writes with index data.
 [Disabling search](../../README.md#disabling-search) disables indexing.
 
 ### Time-To_live
-Time-To-Live is default now at the table level. It can not be overridden in write requests.
+Time-To-Live is default now at the table level. It cannot be overridden in write requests.
 
 There's a different default TTL for trace data and indexes, 7 days vs 3 days respectively. The impact is that you can
 retrieve a trace by ID for up to 7 days, but you can only search the last 3 days of traces (ex by service name).

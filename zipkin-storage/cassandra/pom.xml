@@ -50,15 +50,24 @@
 
     <dependency>
       <groupId>com.datastax.oss</groupId>
-      <artifactId>java-driver-core</artifactId>
-      <version>${java-driver.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>com.datastax.oss</groupId>
       <artifactId>java-driver-query-builder</artifactId>
       <version>${java-driver.version}</version>
+      <!-- Exclude unused graph and reactive streams dependencies -->
+      <exclusions>
+        <exclusion>
+          <groupId>com.esri.geometry</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.tinkerpop</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.reactivestreams</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
-
 
     <!-- To test nuance of load balancing behavior -->
     <dependency>

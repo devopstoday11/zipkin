@@ -239,11 +239,10 @@ The following are tuning parameters which may not concern all users:
     * `CASSANDRA_INDEX_CACHE_TTL`: How many seconds to cache index metadata about a trace. Defaults to 60.
     * `CASSANDRA_INDEX_FETCH_MULTIPLIER`: How many more index rows to fetch than the user-supplied query limit. Defaults to 3.
 
-Example usage with Cassandra connection and query logging:
-
+Example usage with Cassandra with request logging (TRACE shows query values):
 ```bash
 $ STORAGE_TYPE=cassandra3 java -jar zipkin.jar \
- --logging.level.com.datastax.oss.driver.api.core.cql=debug
+--logging.level.com.datastax.oss.driver.internal.core.tracker.RequestLogger=DEBUG
 ```
 
 ### Elasticsearch Storage

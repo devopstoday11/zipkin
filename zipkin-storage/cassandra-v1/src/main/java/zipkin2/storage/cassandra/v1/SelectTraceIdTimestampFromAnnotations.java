@@ -35,6 +35,6 @@ final class SelectTraceIdTimestampFromAnnotations extends SelectTraceIdIndex.Fac
   @Override void bindPartitionKey(BoundStatementBuilder bound, String partitionKey) {
     bound
       .setBytesUnsafe(0, CassandraUtil.toByteBuffer(partitionKey))
-      .setSet(1, BUCKETS, int.class);
+      .setList(1, BUCKETS, Integer.class);
   }
 }

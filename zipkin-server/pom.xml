@@ -145,25 +145,6 @@
       <artifactId>zipkin-storage-cassandra-v1</artifactId>
       <version>${project.version}</version>
       <optional>true</optional>
-      <exclusions>
-        <exclusion>
-          <groupId>com.datastax.oss</groupId>
-          <artifactId>java-driver-core</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <!-- shaded to not interfere with netty 4.1 and boringssl. [JAVA-1241] -->
-    <dependency>
-      <groupId>com.datastax.oss</groupId>
-      <artifactId>java-driver-core</artifactId>
-      <version>${java-driver.version}</version>
-      <optional>true</optional>
-      <exclusions>
-        <exclusion>
-          <groupId>io.netty</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
 
     <!-- Elasticsearch http -->

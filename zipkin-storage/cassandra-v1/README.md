@@ -17,12 +17,10 @@ zipkin-server).
 
 Zipkin's storage layer logs to the category "zipkin2.storage.cassandra",
 but you may wish to see the entire "zipkin2" when troubleshooting.
-Depending on details desired, the underlying driver's category
-"com.datastax.oss.driver.api.core.cql" at debug level may help.
 
-If you just want to see queries and latency, set the category
-"com.datastax.oss.driver.api.core.cql.QueryLogger" to debug or trace. Trace level
-includes bound values.
+If you want to see requests and latency, set the logging category
+"com.datastax.oss.driver.internal.core.tracker.RequestLogger" to DEBUG.
+TRACE includes query values.
 
 See [Request Logger](https://docs.datastax.com/en/developer/java-driver/4.9/manual/core/request_tracker/#request-logger) for more details.
 
