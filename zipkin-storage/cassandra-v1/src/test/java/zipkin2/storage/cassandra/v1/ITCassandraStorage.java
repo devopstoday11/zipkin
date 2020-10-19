@@ -15,7 +15,6 @@ package zipkin2.storage.cassandra.v1;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -32,7 +31,6 @@ import zipkin2.storage.StorageComponent;
 
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
-import static zipkin2.TestObjects.DAY;
 import static zipkin2.TestObjects.TODAY;
 import static zipkin2.storage.cassandra.v1.InternalForTests.writeDependencyLinks;
 
@@ -101,41 +99,6 @@ class ITCassandraStorage {
     @Override @Test @Disabled("Duration unsupported") public void getTraces_lateDuration() {
     }
 
-    @Test public void overFetchesToCompensateForDuplicateIndexData() throws IOException {
-      int traceCount = 2000;
-
-      List<Span> spans = new ArrayList<>();
-      for (int i = 0; i < traceCount; i++) {
-        final long delta = i * 1000; // all timestamps happen a millisecond later
-        for (Span s : TestObjects.TRACE) {
-          Span.Builder builder = s.toBuilder()
-            .traceId(Long.toHexString((i + 1) * 10L))
-            .timestamp(s.timestampAsLong() + delta);
-          s.annotations().forEach(a -> builder.addAnnotation(a.timestamp() + delta, a.value()));
-          spans.add(builder.build());
-        }
-      }
-
-      accept(spans.toArray(new Span[0]));
-
-      // Index ends up containing more rows than services * trace count, and cannot be de-duped
-      // in a server-side query.
-      int localServiceCount = storage.serviceAndSpanNames().getServiceNames().execute().size();
-      assertThat(storage
-        .session()
-        .execute("SELECT COUNT(*) from service_name_index")
-        .one()
-        .getLong(0))
-        .isGreaterThan(traceCount * localServiceCount);
-
-      // Implementation over-fetches on the index to allow the user to receive unsurprising results.
-      QueryRequest request = requestBuilder()
-        .serviceName("frontend") // Ensure we use serviceName so that trace_by_service_span is used
-        .lookback(DAY).limit(traceCount).build();
-      assertThat(store().getTraces(request).execute())
-        .hasSize(traceCount);
-    }
-
     @Test void searchingByAnnotationShouldFilterBeforeLimiting() throws IOException {
       int queryLimit = 2;
       int nbTraceFetched = queryLimit * storage.indexFetchMultiplier;
@@ -160,6 +123,21 @@ class ITCassandraStorage {
         .limit(queryLimit)
         .build();
       assertThat(store().getTraces(queryRequest).execute()).hasSize(queryLimit);
+    }
+
+    @Override protected void blockWhileInFlight() {
+      CassandraStorageExtension.blockWhileInFlight(storage);
+    }
+
+    @Override public void clear() {
+      backend.clear(storage);
+    }
+  }
+
+  @Nested
+  class ITLargeTraceTests extends zipkin2.storage.cassandra.v1.ITLargeTraceTests {
+    @Override protected StorageComponent.Builder newStorageBuilder(TestInfo testInfo) {
+      return backend.newStorageBuilder(testInfo);
     }
 
     @Override protected void blockWhileInFlight() {

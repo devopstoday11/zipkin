@@ -45,7 +45,7 @@ public abstract class CassandraStorageBuilder<B extends CassandraStorageBuilder<
   protected String keyspace;
   protected boolean ensureSchema = true;
 
-  protected int maxTraceCols = 100000;
+  protected int maxTraceCols = 100_000;
   protected int indexFetchMultiplier = 3;
 
   // Zipkin collectors can create out a lot of async requests in bursts, so we

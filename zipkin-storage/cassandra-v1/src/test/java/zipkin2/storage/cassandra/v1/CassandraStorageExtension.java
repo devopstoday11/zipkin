@@ -165,6 +165,13 @@ public class CassandraStorageExtension implements BeforeAllCallback, AfterAllCal
     }
   }
 
+  static long rowCount(CassandraStorage storage, String table) {
+    return storage.session()
+      .execute("SELECT COUNT(*) from " + table)
+      .one()
+      .getLong(0);
+  }
+
   static void blockWhileInFlight(CassandraStorage storage) {
     CqlSession session = storage.session.get();
     // Now, block until writes complete, notably so we can read them.
