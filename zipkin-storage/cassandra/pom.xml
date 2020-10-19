@@ -52,7 +52,7 @@
       <groupId>com.datastax.oss</groupId>
       <artifactId>java-driver-query-builder</artifactId>
       <version>${java-driver.version}</version>
-      <!-- Exclude unused graph and reactive streams dependencies -->
+      <!-- Exclude unused graph and geo dependencies -->
       <exclusions>
         <exclusion>
           <groupId>com.esri.geometry</groupId>
@@ -62,10 +62,8 @@
           <groupId>org.apache.tinkerpop</groupId>
           <artifactId>*</artifactId>
         </exclusion>
-        <exclusion>
-          <groupId>org.reactivestreams</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
+        <!-- We retain reactivestreams even though we don't use it because
+             Mockito dies trying to mock CqlSession without it. -->
       </exclusions>
     </dependency>
 
