@@ -14,6 +14,7 @@
 package zipkin2.storage.cassandra.v1;
 
 import java.io.IOException;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import zipkin2.Span;
 import zipkin2.TestObjects;
@@ -55,32 +56,34 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
    */
   @Test public void skipsRedundantIndexingInATrace() throws IOException {
     Span[] trace = new Span[101];
-    trace[0] = TestObjects.CLIENT_SPAN;
-    long rootTimestamp = trace[0].timestampAsLong();
+    trace[0] = TestObjects.CLIENT_SPAN.toBuilder().kind(Span.Kind.SERVER).build();
 
-    for (int i = 0; i < 100; i++) {
-      trace[i + 1] = Span.newBuilder()
-        .traceId(trace[0].traceId())
-        .parentId(trace[0].id())
-        .id(i + 1)
-        .name(String.valueOf(i + 1))
-        .timestamp(rootTimestamp + i * 1000L) // child span timestamps happen 1 ms later
-        .addAnnotation(trace[0].annotations().get(0).timestamp() + i * 1000, "bar")
-        .build();
-    }
+    IntStream.range(0, 100).forEach(i -> trace[i + 1] = Span.newBuilder()
+      .traceId(trace[0].traceId())
+      .parentId(trace[0].id())
+      .id(Long.toHexString(i + 1))
+      .name("get")
+      .kind(Span.Kind.CLIENT)
+      .localEndpoint(FRONTEND)
+      .timestamp(trace[0].timestampAsLong() + i * 1000) // all peer span timestamps happen 1ms later
+      .duration(10L)
+      .build());
 
     accept(trace);
     assertThat(rowCount(Tables.ANNOTATIONS_INDEX)).isEqualTo(5L);
+    // remoteEndpoint was only in the root span
     assertThat(rowCount(Tables.SERVICE_REMOTE_SERVICE_NAME_INDEX)).isEqualTo(1L);
-    assertThat(rowCount(Tables.SERVICE_NAME_INDEX)).isEqualTo(1L);
-    assertThat(rowCount(Tables.SERVICE_SPAN_NAME_INDEX)).isEqualTo(1L);
+
+    // For this reason, we expect to see rows for span[0], span[99] and span[100] timestamps.
+    assertThat(rowCount(Tables.SERVICE_NAME_INDEX)).isEqualTo(3L);
+    assertThat(rowCount(Tables.SERVICE_SPAN_NAME_INDEX)).isEqualTo(3L);
 
     // redundant store doesn't change the indexes
     accept(trace);
     assertThat(rowCount(Tables.ANNOTATIONS_INDEX)).isEqualTo(5L);
     assertThat(rowCount(Tables.SERVICE_REMOTE_SERVICE_NAME_INDEX)).isEqualTo(1L);
-    assertThat(rowCount(Tables.SERVICE_NAME_INDEX)).isEqualTo(1L);
-    assertThat(rowCount(Tables.SERVICE_SPAN_NAME_INDEX)).isEqualTo(1L);
+    assertThat(rowCount(Tables.SERVICE_NAME_INDEX)).isEqualTo(3L);
+    assertThat(rowCount(Tables.SERVICE_SPAN_NAME_INDEX)).isEqualTo(3L);
   }
 
   long rowCount(String table) {

@@ -57,7 +57,7 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
     IntStream.range(0, 100).forEach(i -> trace[i + 1] = Span.newBuilder()
       .traceId(trace[0].traceId())
       .parentId(trace[0].id())
-      .id(Long.toHexString(i))
+      .id(Long.toHexString(i + 1))
       .name("get")
       .kind(Span.Kind.CLIENT)
       .localEndpoint(FRONTEND)

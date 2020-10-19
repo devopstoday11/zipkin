@@ -52,7 +52,7 @@ public class CassandraStorage extends StorageComponent { // not final for mockin
 
   public static final class Builder extends CassandraStorageBuilder<Builder> {
     SessionFactory sessionFactory = new SessionFactory.Default();
-    int indexCacheMax = 100000;
+    int indexCacheMax = 100_000;
     int indexCacheTtl = 60;
     int spanTtl = (int) TimeUnit.DAYS.toSeconds(7);
     int indexTtl = (int) TimeUnit.DAYS.toSeconds(3);
