@@ -23,7 +23,7 @@ import static zipkin2.storage.cassandra.v1.Tables.SERVICE_NAME_INDEX;
 
 final class SelectTraceIdTimestampFromServiceName extends SelectTraceIdIndex.Factory<String> {
   SelectTraceIdTimestampFromServiceName(CqlSession session) {
-    super(session, SERVICE_NAME_INDEX, "service_name");
+    super(session, SERVICE_NAME_INDEX, "service_name", 2);
   }
 
   @Override Select declarePartitionKey(Select select) {

@@ -20,7 +20,7 @@ import static zipkin2.storage.cassandra.v1.Tables.SERVICE_SPAN_NAME_INDEX;
 
 final class SelectTraceIdTimestampFromServiceSpanName extends SelectTraceIdIndex.Factory<String> {
   SelectTraceIdTimestampFromServiceSpanName(CqlSession session) {
-    super(session, SERVICE_SPAN_NAME_INDEX, "service_span_name");
+    super(session, SERVICE_SPAN_NAME_INDEX, "service_span_name", 1);
   }
 
   @Override void bindPartitionKey(BoundStatementBuilder bound, String partitionKey) {

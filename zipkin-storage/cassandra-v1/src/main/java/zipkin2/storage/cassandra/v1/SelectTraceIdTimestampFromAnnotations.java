@@ -23,7 +23,7 @@ import static zipkin2.storage.cassandra.v1.Tables.ANNOTATIONS_INDEX;
 
 final class SelectTraceIdTimestampFromAnnotations extends SelectTraceIdIndex.Factory<String> {
   SelectTraceIdTimestampFromAnnotations(CqlSession session) {
-    super(session, ANNOTATIONS_INDEX, "annotation");
+    super(session, ANNOTATIONS_INDEX, "annotation", 2);
   }
 
   @Override Select declarePartitionKey(Select select) {

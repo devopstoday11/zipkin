@@ -55,7 +55,7 @@ final class SelectTraceIdIndex<K> extends ResultSetFutureCall<AsyncResultSet> {
     final PreparedStatement preparedStatement;
     final int firstMarkerIndex;
 
-    Factory(CqlSession session, String table, String partitionKeyColumn) {
+    Factory(CqlSession session, String table, String partitionKeyColumn, int partitionKeyCount) {
       this.session = session;
       this.table = table;
       this.partitionKeyColumn = partitionKeyColumn;
@@ -67,7 +67,7 @@ final class SelectTraceIdIndex<K> extends ResultSetFutureCall<AsyncResultSet> {
         .whereColumn("ts").isLessThanOrEqualTo(bindMarker())
         .limit(bindMarker());
       preparedStatement = session.prepare(select.build());
-      firstMarkerIndex = preparedStatement.getVariableDefinitions().size() - 3;
+      firstMarkerIndex = partitionKeyCount;
     }
 
     Select declarePartitionKey(Select select) {
