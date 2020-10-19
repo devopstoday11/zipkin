@@ -84,6 +84,9 @@ public class CassandraStorageExtension implements BeforeAllCallback, AfterAllCal
   }
 
   CassandraStorage.Builder newStorageBuilder(TestInfo testInfo) {
+    if (testInfo.getTestMethod().isPresent()) {
+      LOGGER.info("Building CassandraStorage for: " + testInfo.getTestMethod().get().getName());
+    }
     return CassandraStorage.newBuilder()
       .contactPoints(contactPoint())
       .maxConnections(1)
