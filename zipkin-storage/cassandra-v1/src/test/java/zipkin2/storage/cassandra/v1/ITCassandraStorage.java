@@ -137,7 +137,7 @@ class ITCassandraStorage {
   @Nested
   class ITLargeTraceTests extends zipkin2.storage.cassandra.v1.ITLargeTraceTests {
     @Override protected StorageComponent.Builder newStorageBuilder(TestInfo testInfo) {
-      return backend.newStorageBuilder(testInfo);
+      return backend.newStorageBuilder(testInfo).keyspace(InternalForTests.keyspace(testInfo));
     }
 
     @Override protected void blockWhileInFlight() {
@@ -145,7 +145,8 @@ class ITCassandraStorage {
     }
 
     @Override public void clear() {
-      backend.clear(storage);
+      // Intentionally don't clean up as each method runs in an isolated keyspace. This prevents
+      // adding more load to the shared Cassandra instance used for all tests.
     }
   }
 
