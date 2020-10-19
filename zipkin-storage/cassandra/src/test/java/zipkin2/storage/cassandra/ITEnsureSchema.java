@@ -29,6 +29,7 @@ import static zipkin2.storage.cassandra.ITCassandraStorage.SEARCH_TABLES;
 import static zipkin2.storage.cassandra.Schema.TABLE_DEPENDENCY;
 import static zipkin2.storage.cassandra.Schema.TABLE_SPAN;
 
+/** This test is very slow as installing the schema can take 10s per method. */
 abstract class ITEnsureSchema {
 
   abstract protected String keyspace();

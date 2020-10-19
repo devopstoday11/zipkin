@@ -26,6 +26,7 @@ import static zipkin2.TestObjects.CLIENT_SPAN;
 import static zipkin2.TestObjects.DAY;
 import static zipkin2.TestObjects.TODAY;
 
+/** This test is very slow as installing the schema can take 10s per method. */
 abstract class ITEnsureSchema {
 
   abstract String keyspace();
