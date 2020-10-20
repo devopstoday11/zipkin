@@ -13,16 +13,15 @@
  */
 package zipkin2.storage.cassandra.v1;
 
-import java.io.IOException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import zipkin2.Span;
-import zipkin2.TestObjects;
 import zipkin2.storage.ITStorage;
 import zipkin2.storage.StorageComponent;
 
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
-import static zipkin2.TestObjects.FRONTEND;
+import static zipkin2.TestObjects.newClientSpan;
 import static zipkin2.storage.cassandra.v1.CassandraStorageExtension.rowCount;
 
 abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
@@ -35,23 +34,28 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
    * annotations, like "sa", don't have string values, so are similarly not queryable. Skipping
    * indexing of such annotations dramatically reduces the load on cassandra and size of indexes.
    */
-  @Test public void doesntIndexCoreOrNonStringAnnotations() throws IOException {
-    accept(TestObjects.CLIENT_SPAN);
+  @Test public void doesntIndexCoreOrNonStringAnnotations(TestInfo testInfo) throws Exception {
+    String testSuffix = testSuffix(testInfo);
+    Span clientSpan = newClientSpan(testSuffix).toBuilder().putTag("environment", "test").build();
+
+    accept(clientSpan);
 
     assertThat(storage.session().execute("SELECT blobastext(annotation) from annotations_index")
       .all())
       .extracting(r -> r.getString(0))
       .containsExactlyInAnyOrder(
-        "frontend:http.path",
-        "frontend:http.path:/api",
-        "frontend:clnt/finagle.version:6.45.0",
-        "frontend:foo",
-        "frontend:clnt/finagle.version");
+        clientSpan.localServiceName() + ":http.method:GET",
+        clientSpan.localServiceName() + ":http.path",
+        clientSpan.localServiceName() + ":http.method",
+        clientSpan.localServiceName() + ":environment:test",
+        clientSpan.localServiceName() + ":http.path:/foo",
+        clientSpan.localServiceName() + ":environment");
   }
 
-  @Test public void addsAutocompleteTag() throws IOException {
+  @Test public void addsAutocompleteTag(TestInfo testInfo) throws Exception {
+    String testSuffix = testSuffix(testInfo);
     Span[] trace = new Span[2];
-    trace[0] = TestObjects.CLIENT_SPAN;
+    trace[0] = newClientSpan(testSuffix);
 
     trace[1] = Span.newBuilder()
       .traceId(trace[0].traceId())
@@ -60,9 +64,9 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
       .name("1")
       .putTag("environment", "dev")
       .putTag("a", "b")
-      .localEndpoint(FRONTEND)
+      .localEndpoint(trace[0].localEndpoint())
       .timestamp(trace[0].timestampAsLong() + 1000L) // child span timestamps happen 1ms later
-      .addAnnotation(trace[0].annotations().get(0).timestamp() + 1000L, "bar")
+      .addAnnotation(trace[0].timestampAsLong() + 1500L, "bar")
       .build();
     accept(trace);
 

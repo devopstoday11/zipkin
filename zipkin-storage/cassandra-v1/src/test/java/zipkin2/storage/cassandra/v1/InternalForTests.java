@@ -26,7 +26,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.junit.jupiter.api.TestInfo;
 import zipkin2.DependencyLink;
 import zipkin2.internal.Dependencies;
 
@@ -76,17 +75,5 @@ class InternalForTests {
       .value("dependencies", bindMarker()).build());
 
     storage.session().execute(prepared.bind(Instant.ofEpochMilli(midnightUTC), thrift));
-  }
-
-  static String keyspace(TestInfo testInfo) {
-    String result;
-    if (testInfo.getTestMethod().isPresent()) {
-      result = testInfo.getTestMethod().get().getName();
-    } else {
-      assert testInfo.getTestClass().isPresent();
-      result = testInfo.getTestClass().get().getSimpleName();
-    }
-    result = result.toLowerCase();
-    return result.length() <= 48 ? result : result.substring(result.length() - 48);
   }
 }

@@ -13,14 +13,13 @@
  */
 package zipkin2.storage.cassandra;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import zipkin2.Call;
 import zipkin2.Span;
-import zipkin2.TestObjects;
 import zipkin2.internal.AggregateCall;
 import zipkin2.storage.ITStorage;
 import zipkin2.storage.StorageComponent;
@@ -28,7 +27,10 @@ import zipkin2.storage.cassandra.internal.call.InsertEntry;
 
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
-import static zipkin2.TestObjects.FRONTEND;
+import static zipkin2.Span.Kind.SERVER;
+import static zipkin2.TestObjects.CLIENT_SPAN;
+import static zipkin2.TestObjects.newClientSpan;
+import static zipkin2.TestObjects.spanBuilder;
 
 abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
   @Override protected void configureStorageForTest(StorageComponent.Builder storage) {
@@ -36,11 +38,12 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
   }
 
   /**
-   * {@link Span#duration()} == 0 is likely to be a mistake, and coerces to null. It is not helpful
-   * to index rows who have no duration.
+   * {@link Span#timestamp()} == 0 is likely to be a mistake, and coerces to null. It is not helpful
+   * to index rows who have no timestamp.
    */
-  @Test public void doesntIndexSpansMissingDuration() throws IOException {
-    accept(Span.newBuilder().traceId("1").id("1").name("get").duration(0L).build());
+  @Test public void doesntIndexSpansMissingTimestamp(TestInfo testInfo) throws Exception {
+    String testSuffix = testSuffix(testInfo);
+    accept(spanBuilder(testSuffix).timestamp(0L).duration(0L).build());
 
     assertThat(rowCountForTraceByServiceSpan(storage)).isZero();
   }
@@ -50,9 +53,10 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
    * one. The consumer code optimizes index inserts to only represent the interval represented by
    * the trace as opposed to each individual timestamp.
    */
-  @Test public void skipsRedundantIndexingInATrace() throws IOException {
+  @Test public void skipsRedundantIndexingInATrace(TestInfo testInfo) throws Exception {
+    String testSuffix = testSuffix(testInfo);
     Span[] trace = new Span[101];
-    trace[0] = TestObjects.CLIENT_SPAN.toBuilder().kind(Span.Kind.SERVER).build();
+    trace[0] = newClientSpan(testSuffix).toBuilder().kind(SERVER).build();
 
     IntStream.range(0, 100).forEach(i -> trace[i + 1] = Span.newBuilder()
       .traceId(trace[0].traceId())
@@ -60,7 +64,7 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
       .id(Long.toHexString(i + 1))
       .name("get")
       .kind(Span.Kind.CLIENT)
-      .localEndpoint(FRONTEND)
+      .localEndpoint(trace[0].localEndpoint())
       .timestamp(trace[0].timestampAsLong() + i * 1000) // all peer span timestamps happen 1ms later
       .duration(10L)
       .build());
@@ -87,9 +91,10 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
       .isGreaterThanOrEqualTo(120L);
   }
 
-  @Test public void insertTags_SelectTags_CalculateCount() throws IOException {
+  @Test public void insertTags_SelectTags_CalculateCount(TestInfo testInfo) throws Exception {
+    String testSuffix = testSuffix(testInfo);
     Span[] trace = new Span[101];
-    trace[0] = TestObjects.CLIENT_SPAN.toBuilder().kind(Span.Kind.SERVER).build();
+    trace[0] = newClientSpan(testSuffix).toBuilder().kind(SERVER).build();
 
     IntStream.range(0, 100).forEach(i -> trace[i + 1] = Span.newBuilder()
       .traceId(trace[0].traceId())
@@ -97,7 +102,7 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
       .id(Long.toHexString(i))
       .name("get")
       .kind(Span.Kind.CLIENT)
-      .localEndpoint(FRONTEND)
+      .localEndpoint(trace[0].localEndpoint())
       .putTag("environment", "dev")
       .putTag("a", "b")
       .timestamp(trace[0].timestampAsLong() + i * 1000) // all peer span timestamps happen 1ms later
@@ -114,8 +119,11 @@ abstract class ITSpanConsumer extends ITStorage<CassandraStorage> {
 
   /** It is easier to use a real Cassandra connection than mock a prepared statement. */
   @Test public void insertEntry_niceToString() {
+    // This test can use fake data as it is never written to cassandra
+    Span clientSpan = CLIENT_SPAN;
+
     AggregateCall<?, ?> acceptCall =
-      (AggregateCall<?, ?>) storage.spanConsumer().accept(asList(TestObjects.CLIENT_SPAN));
+      (AggregateCall<?, ?>) storage.spanConsumer().accept(asList(clientSpan));
 
     List<Call<?>> insertEntryCalls = acceptCall.delegate().stream()
       .filter(c -> c instanceof InsertEntry)

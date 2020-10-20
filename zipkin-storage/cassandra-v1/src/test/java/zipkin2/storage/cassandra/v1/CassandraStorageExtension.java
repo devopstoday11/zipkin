@@ -24,7 +24,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -79,6 +78,7 @@ public class CassandraStorageExtension implements BeforeAllCallback, AfterAllCal
       container = null; // try with local connection instead
       globalSession = tryToInitializeSession(contactPoint());
     }
+    LOGGER.info("Using contactPoint " + contactPoint());
   }
 
   // Builds a session without trying to use a namespace or init UDTs
@@ -96,10 +96,7 @@ public class CassandraStorageExtension implements BeforeAllCallback, AfterAllCal
     return session;
   }
 
-  CassandraStorage.Builder newStorageBuilder(TestInfo testInfo) {
-    if (testInfo.getTestMethod().isPresent()) {
-      LOGGER.info("Building CassandraStorage for: " + testInfo.getTestMethod().get().getName());
-    }
+  CassandraStorage.Builder newStorageBuilder() {
     return newStorageBuilder(contactPoint());
   }
 
